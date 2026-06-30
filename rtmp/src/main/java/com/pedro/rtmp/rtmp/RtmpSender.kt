@@ -84,7 +84,18 @@ class RtmpSender(
           if (flvPacket.type == FlvType.VIDEO) {
             videoFramesSent++
             socket?.let { socket ->
-              size = commandsManager.sendVideoPacket(flvPacket, socket)
+              size = commandsManager.sendVideoPacket(
+                flvPacket, socket,
+                audioSupplier = { pollPendingAudioFlv() },
+                onAudioSent = { audioSize ->
+                  audioFramesSent++
+                  bytesSend += audioSize
+                  bytesSendPerSecond += audioSize
+                  if (isEnableLogs) {
+                    Log.i(TAG, "wrote Audio packet (interleaved), size $audioSize")
+                  }
+                }
+              )
               if (isEnableLogs) {
                 Log.i(TAG, "wrote Video packet, size $size")
               }
@@ -116,6 +127,14 @@ class RtmpSender(
   override suspend fun stopImp(clear: Boolean) {
     audioPacket.reset(clear)
     videoPacket.reset(clear)
+  }
+
+  /** Non-blocking: only returns a value if an audio frame is already next in line. */
+  private suspend fun pollPendingAudioFlv(): FlvPacket? {
+    val frame = pollPendingAudio() ?: return null
+    var result: FlvPacket? = null
+    audioPacket.createFlvPacket(frame) { result = it }
+    return result
   }
 
   private suspend fun getFlvPacket(mediaFrame: MediaFrame?, callback: suspend (FlvPacket) -> Unit) {

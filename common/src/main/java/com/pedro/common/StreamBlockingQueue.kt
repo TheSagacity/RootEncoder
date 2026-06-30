@@ -37,6 +37,19 @@ class StreamBlockingQueue(size: Int) {
         return queue.take()
     }
 
+    /**
+     * Non-blocking. Removes and returns the head only if it is an audio frame.
+     * Used to interleave pending audio between video chunk writes without
+     * disturbing the timestamp-based ordering (audio is only pulled early
+     * relative to a video frame currently being written, never reordered
+     * relative to other audio frames).
+     */
+    fun pollAudioIfHead(): MediaFrame? {
+        val head = queue.peek() ?: return null
+        if (head.type != MediaFrame.Type.AUDIO) return null
+        return queue.poll()
+    }
+
     fun remainingCapacity(): Int = queue.remainingCapacity()
 
     fun drainTo(destiny: StreamBlockingQueue) {

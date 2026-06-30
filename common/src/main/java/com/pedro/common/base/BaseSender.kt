@@ -46,6 +46,12 @@ abstract class BaseSender(
     protected abstract suspend fun onRun()
     protected abstract suspend fun stopImp(clear: Boolean = true)
 
+    /**
+     * Non-blocking peek/take of a pending audio frame, used to interleave
+     * audio between video chunk writes during a large video frame send.
+     */
+    fun pollPendingAudio(): MediaFrame? = queue.pollAudioIfHead()
+
     fun sendMediaFrame(mediaFrame: MediaFrame) {
         if (running && !queue.trySend(mediaFrame)) {
             when (mediaFrame.type) {

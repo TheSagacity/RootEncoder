@@ -21,8 +21,10 @@ import com.pedro.common.AudioCodec
 import com.pedro.common.TimeUtils
 import com.pedro.common.VideoCodec
 import com.pedro.rtmp.flv.FlvPacket
+import com.pedro.rtmp.rtmp.chunk.ChunkType
 import com.pedro.rtmp.rtmp.message.Acknowledgement
 import com.pedro.rtmp.rtmp.message.Audio
+import com.pedro.rtmp.rtmp.message.BasicHeader
 import com.pedro.rtmp.rtmp.message.RtmpMessage
 import com.pedro.rtmp.rtmp.message.SetChunkSize
 import com.pedro.rtmp.rtmp.message.Video
@@ -194,15 +196,63 @@ abstract class CommandsManager {
     }
   }
 
+  /**
+   * @param audioSupplier non-blocking poll for a pending audio frame, already FLV-encoded.
+   * Checked between each RTMP chunk of the video body so a ready audio packet doesn't
+   * wait behind a whole video frame write (which on a slow/congested uplink can take
+   * hundreds of ms and would otherwise starve audio, causing audible crackle/gaps).
+   */
   @Throws(IOException::class)
-  suspend fun sendVideoPacket(flvPacket: FlvPacket, socket: RtmpSocket): Int {
+  suspend fun sendVideoPacket(
+    flvPacket: FlvPacket, socket: RtmpSocket,
+    audioSupplier: (suspend () -> FlvPacket?)? = null,
+    onAudioSent: ((Int) -> Unit)? = null
+  ): Int {
     writeSync.withLock {
       val video = Video(flvPacket, streamId)
       video.writeHeader(socket)
-      video.writeBody(socket)
+      if (audioSupplier != null) {
+        writeBodyInterleaved(video, socket, audioSupplier, onAudioSent)
+      } else {
+        video.writeBody(socket)
+      }
       socket.flush(true)
       return video.header.getPacketLength() //get packet size with header included to calculate bps
     }
+  }
+
+  /**
+   * Same chunking as RtmpMessage.writeBody, but after each chunk gives audio a chance
+   * to jump the queue and go out on the wire immediately. Must be called while already
+   * holding writeSync (caller's responsibility) since it writes directly to the socket.
+   */
+  @Throws(IOException::class)
+  private suspend fun writeBodyInterleaved(
+    video: RtmpMessage, socket: RtmpSocket,
+    audioSupplier: suspend () -> FlvPacket?,
+    onAudioSent: ((Int) -> Unit)?
+  ) {
+    val chunkSize = RtmpConfig.writeChunkSize
+    val bytes = video.storeBody()
+    var pos = 0
+    var length = video.getSize()
+
+    while (length > chunkSize) {
+      socket.write(bytes, pos, chunkSize)
+      length -= chunkSize
+      pos += chunkSize
+
+      val pendingAudio = audioSupplier()
+      if (pendingAudio != null) {
+        val audio = Audio(pendingAudio, streamId)
+        audio.writeHeader(socket)
+        audio.writeBody(socket)
+        onAudioSent?.invoke(audio.header.getPacketLength())
+      }
+
+      video.header.writeHeader(BasicHeader(ChunkType.TYPE_3, video.header.basicHeader.chunkStreamId), socket)
+    }
+    socket.write(bytes, pos, length)
   }
 
   @Throws(IOException::class)
