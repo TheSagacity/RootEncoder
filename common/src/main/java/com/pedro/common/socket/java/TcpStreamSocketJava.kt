@@ -30,6 +30,7 @@ class TcpStreamSocketJava(
         val socketAddress: SocketAddress = InetSocketAddress(host, port)
         socket.connect(socketAddress, timeout.toInt())
         socket.soTimeout = timeout.toInt()
+        socket.tcpNoDelay = true
         return socket
     }
 }

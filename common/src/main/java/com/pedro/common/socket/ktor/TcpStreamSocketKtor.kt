@@ -20,7 +20,10 @@ class TcpStreamSocketKtor(
         selectorManager = SelectorManager(Dispatchers.IO)
         val builder = aSocket(selectorManager).tcp().connect(
             remoteAddress = InetSocketAddress(host, port),
-            configure = { if (!secured) socketTimeout = timeout }
+            configure = {
+                noDelay = true
+                if (!secured) socketTimeout = timeout
+            }
         )
         return if (secured) {
             builder.tls(Dispatchers.IO) {
