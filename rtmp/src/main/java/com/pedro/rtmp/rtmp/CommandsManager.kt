@@ -247,6 +247,13 @@ abstract class CommandsManager {
         val audio = Audio(pendingAudio, streamId)
         audio.writeHeader(socket)
         audio.writeBody(socket)
+        // socket.write() above only appends to a local (non-flushing) write buffer.
+        // Without an actual flush here, this audio packet stays queued behind the
+        // rest of the video frame's chunks and only reaches the wire together with
+        // them in the single flush(true) call after this loop — i.e. no real
+        // interleaving happens on the network, only in this function's bytecode.
+        // Flush now so audio is genuinely sent immediately, mid video-frame.
+        socket.flush(false)
         onAudioSent?.invoke(audio.header.getPacketLength())
       }
 
