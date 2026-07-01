@@ -45,9 +45,10 @@ class StreamBlockingQueue(size: Int) {
      * relative to other audio frames).
      */
     fun pollAudioIfHead(): MediaFrame? {
-        val head = queue.peek() ?: return null
-        if (head.type != MediaFrame.Type.AUDIO) return null
-        return queue.poll()
+        val head = queue.poll() ?: return null
+        if (head.type == MediaFrame.Type.AUDIO) return head
+        queue.add(head) // wasn't audio, put back - priority queue reorders correctly
+        return null
     }
 
     fun remainingCapacity(): Int = queue.remainingCapacity()
