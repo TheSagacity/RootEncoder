@@ -84,6 +84,18 @@ class RtmpSender(
           if (flvPacket.type == FlvType.VIDEO) {
             videoFramesSent++
             socket?.let { socket ->
+              // audio first: flush any audio stuck behind the video backlog so it
+              // isn't delayed by the (potentially slow) video frame write below
+              while (true) {
+                val pendingAudio = pollPendingAudioFlv() ?: break
+                val audioSize = commandsManager.sendAudioPacket(pendingAudio, socket)
+                audioFramesSent++
+                bytesSend += audioSize
+                bytesSendPerSecond += audioSize
+                if (isEnableLogs) {
+                  Log.i(TAG, "wrote Audio packet (priority), size $audioSize")
+                }
+              }
               size = commandsManager.sendVideoPacket(
                 flvPacket, socket,
                 audioSupplier = { pollPendingAudioFlv() },

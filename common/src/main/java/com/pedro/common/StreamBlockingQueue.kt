@@ -38,17 +38,29 @@ class StreamBlockingQueue(size: Int) {
     }
 
     /**
-     * Non-blocking. Removes and returns the head only if it is an audio frame.
-     * Used to interleave pending audio between video chunk writes without
-     * disturbing the timestamp-based ordering (audio is only pulled early
-     * relative to a video frame currently being written, never reordered
-     * relative to other audio frames).
+     * Non-blocking. Removes and returns the earliest audio frame in the queue,
+     * even if video frames with earlier timestamps are queued ahead of it.
+     * Under network backpressure the queue backlogs with video (video bytes >> audio bytes),
+     * so newly captured audio always has a later timestamp than the backlogged video and
+     * would otherwise wait behind the whole video backlog. Audio frames are never
+     * reordered relative to other audio frames, so the audio chunk stream timestamps
+     * stay monotonic.
      */
-    fun pollAudioIfHead(): MediaFrame? {
+    fun pollAudio(): MediaFrame? {
+        // fast path: head is already audio
         val head = queue.poll() ?: return null
         if (head.type == MediaFrame.Type.AUDIO) return head
         queue.add(head) // wasn't audio, put back - priority queue reorders correctly
-        return null
+        // slow path: find the earliest audio frame behind the video backlog
+        var candidate: MediaFrame? = null
+        for (frame in queue) {
+            if (frame.type == MediaFrame.Type.AUDIO &&
+                (candidate == null || frame.info.timestamp < candidate.info.timestamp)) {
+                candidate = frame
+            }
+        }
+        val audio = candidate ?: return null
+        return if (queue.remove(audio)) audio else null
     }
 
     fun remainingCapacity(): Int = queue.remainingCapacity()
