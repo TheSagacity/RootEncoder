@@ -64,6 +64,7 @@ public abstract class BaseEncoder implements EncoderCallback {
   protected String type;
   protected CodecUtil.CodecTypeError typeError;
   protected TimestampMode timestampMode = TimestampMode.CLOCK;
+  protected int codecCallbackThreadPriority = android.os.Process.THREAD_PRIORITY_DEFAULT;
 
   public void setEncoderErrorCallback(CodecErrorCallback encoderErrorCallback) {
     this.encoderErrorCallback = encoderErrorCallback;
@@ -100,7 +101,7 @@ public abstract class BaseEncoder implements EncoderCallback {
 
   protected void setCallback() {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !type.equals(CodecUtil.G711_MIME)) {
-      handlerThread = new HandlerThread(TAG);
+      handlerThread = new HandlerThread(TAG, codecCallbackThreadPriority);
       handlerThread.start();
       handler = new Handler(handlerThread.getLooper());
       createAsyncCallback();

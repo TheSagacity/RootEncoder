@@ -54,6 +54,7 @@ public class AudioEncoder extends BaseEncoder implements GetMicrophoneData {
     typeError = CodecUtil.CodecTypeError.AUDIO_CODEC;
     type = CodecUtil.AAC_MIME;
     TAG = "AudioEncoder";
+    codecCallbackThreadPriority = android.os.Process.THREAD_PRIORITY_URGENT_AUDIO;
   }
 
   /**
