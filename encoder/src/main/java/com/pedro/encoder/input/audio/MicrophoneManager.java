@@ -191,9 +191,9 @@ public class MicrophoneManager {
     init();
     handlerThread = new HandlerThread(TAG, android.os.Process.THREAD_PRIORITY_URGENT_AUDIO);
     handlerThread.start();
-    android.os.Process.setThreadPriority(handlerThread.getThreadId(), android.os.Process.THREAD_PRIORITY_URGENT_AUDIO);
     Handler handler = new Handler(handlerThread.getLooper());
     handler.post(() -> {
+      android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_AUDIO);
       while (running) {
         Frame frame = read();
         if (frame != null) {
