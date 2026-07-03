@@ -6,15 +6,14 @@ import com.pedro.common.ConnectChecker
 import com.pedro.common.StreamBlockingQueue
 import com.pedro.common.frame.MediaFrame
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.nio.ByteBuffer
-import java.util.concurrent.Executors
 
 abstract class BaseSender(
     protected val connectChecker: ConnectChecker,
@@ -35,16 +34,7 @@ abstract class BaseSender(
     private val bitrateManager: BitrateManager = BitrateManager(connectChecker)
     protected var isEnableLogs = true
     private var job: Job? = null
-    // Dedicated thread instead of the shared Dispatchers.IO pool: on weaker SoCs the
-    // shared pool gets preempted by unrelated IO coroutines, causing periodic stalls
-    // in this send loop that surface as rhythmic audio glitches.
-    private val senderExecutor = Executors.newSingleThreadExecutor { r ->
-        Thread {
-            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_AUDIO)
-            r.run()
-        }.apply { name = "$TAG-Sender" }
-    }
-    protected val scope = CoroutineScope(senderExecutor.asCoroutineDispatcher())
+    protected val scope = CoroutineScope(Dispatchers.IO)
     @Volatile
     var bytesSend = 0L
         protected set
