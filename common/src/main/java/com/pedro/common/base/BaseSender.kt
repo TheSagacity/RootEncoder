@@ -72,7 +72,12 @@ abstract class BaseSender(
         queue.clear()
         running = true
         job = scope.launch {
-            val bitrateTask = async {
+            // Runs on Dispatchers.Default, not the shared Dispatchers.IO pool used by onRun():
+            // on weaker SoCs the IO pool gets congested by unrelated blocking IO coroutines
+            // elsewhere in the app, which was delaying this timer's delay(1000) resumption by
+            // 10+ seconds even while onRun() kept writing packets fine. That stale bitrate
+            // timestamp was mistaken by app-level watchdogs for a real stream stall.
+            val bitrateTask = async(Dispatchers.Default) {
                 while (scope.isActive && running) {
                     //bytes to bits
                     bitrateManager.calculateBitrate(bytesSendPerSecond * 8)
